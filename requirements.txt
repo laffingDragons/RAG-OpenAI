@@ -1,1 +1,9 @@
-streamlit langchain langchain-community transformers sentence-transformers faiss-cpu PyPDF2 pymupdf pandas
+langchain 
+streamlit 
+langchain-community
+transformers
+sentence-transformers
+faiss-cpu 
+PyPDF2 
+pymupdf 
+pandas
