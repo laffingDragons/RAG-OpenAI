@@ -1,15 +1,1 @@
-langchain_openai
-langchain_core
-python-dotenv
-streamlit
-langchain_community
-langserve
-fastapi
-uvicorn
-sse_starlette
-bs4
-pypdf
-chromadb
-faiss-cpu
-streamlit
-openai==0.27.0
+pip install streamlit langchain langchain-community transformers sentence-transformers faiss-cpu PyPDF2 pymupdf pandas
