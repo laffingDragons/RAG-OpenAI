@@ -12,3 +12,4 @@ pypdf
 chromadb
 faiss-cpu
 streamlit
+openai==0.27.0
