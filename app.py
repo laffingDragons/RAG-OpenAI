@@ -26,7 +26,12 @@ def load_and_split_document(uploaded_file):
         
         # Split the document into chunks
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
-        return text_splitter.split_documents(documents)
+        split_documents = text_splitter.split_documents(documents)
+
+        # Debug: Print out the first few chunks to check the structure
+        st.write(f"Documents: {split_documents[:3]}")  # Output the first 3 chunks for debugging
+        
+        return split_documents
     except Exception as e:
         st.error(f"Error processing file: {str(e)}")
         return None
@@ -69,12 +74,18 @@ if uploaded_file is not None:
         st.write(f"Document split into {len(documents)} chunks.")
 
         # Create the retriever using the loaded documents
-        retriever = RetrievalQA.from_documents(documents, OpenAI())
+        try:
+            retriever = RetrievalQA.from_documents(documents, OpenAI())
+        except Exception as e:
+            st.error(f"Error creating retriever: {str(e)}")
 
         # User query input
         query = st.text_input("Ask a question:")
 
         if query:
             # Retrieve the answer from the model
-            result = retriever.run(query)
-            st.write(f"Answer: {result}")
+            try:
+                result = retriever.run(query)
+                st.write(f"Answer: {result}")
+            except Exception as e:
+                st.error(f"Error retrieving answer: {str(e)}")
