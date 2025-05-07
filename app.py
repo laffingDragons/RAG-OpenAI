@@ -33,7 +33,7 @@ def load_and_split_document(uploaded_file):
         st.write(f"Documents: {split_documents[:3]}")  # Output the first 3 chunks for debugging
         
         # Ensure documents are in the correct format (i.e., list of Document objects)
-        processed_documents = [Document(page_content=doc['content'], metadata=doc.get('metadata', {})) for doc in split_documents]
+        processed_documents = [Document(page_content=doc.page_content, metadata=doc.metadata) for doc in split_documents]
         
         return processed_documents
     except Exception as e:
