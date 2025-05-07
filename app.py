@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 import os
 import tempfile
 import openai
+from langchain.schema import Document
 
 # Function to load and split documents
 def load_and_split_document(uploaded_file):
@@ -28,10 +29,13 @@ def load_and_split_document(uploaded_file):
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
         split_documents = text_splitter.split_documents(documents)
 
-        # Debug: Print out the first few chunks to check the structure
+        # Debug: Check the structure of documents
         st.write(f"Documents: {split_documents[:3]}")  # Output the first 3 chunks for debugging
         
-        return split_documents
+        # Ensure documents are in the correct format (i.e., list of Document objects)
+        processed_documents = [Document(page_content=doc['content'], metadata=doc.get('metadata', {})) for doc in split_documents]
+        
+        return processed_documents
     except Exception as e:
         st.error(f"Error processing file: {str(e)}")
         return None
