@@ -1,151 +1,80 @@
 import streamlit as st
-import os
-import tempfile
-import PyPDF2
 from langchain_community.document_loaders import PyPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_community.vectorstores import FAISS
-from langchain_community.embeddings import HuggingFaceEmbeddings
-from langchain_community.llms import HuggingFacePipeline
 from langchain.chains import RetrievalQA
-from transformers import pipeline
-import fitz  # PyMuPDF for PDF preview
-from datetime import datetime
-import pandas as pd
-
-# Initialize session state
-if "query_history" not in st.session_state:
-    st.session_state.query_history = []
-if "processed" not in st.session_state:
-    st.session_state.processed = False
-if "retriever" not in st.session_state:
-    st.session_state.retriever = None
+from langchain.llms import OpenAI
+from dotenv import load_dotenv
+import os
+import tempfile
+import openai
 
 # Function to load and split documents
-@st.cache_data
-def load_and_split_documents(uploaded_files, chunk_size=1000, chunk_overlap=200):
-    documents = []
-    for uploaded_file in uploaded_files:
-        try:
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
-                tmp_file.write(uploaded_file.read())
-                tmp_file_path = tmp_file.name
-
-            loader = PyPDFLoader(tmp_file_path)
-            docs = loader.load()
-            documents.extend(docs)
-            os.unlink(tmp_file_path)  # Clean up
-        except Exception as e:
-            st.error(f"Error processing {uploaded_file.name}: {str(e)}")
-            continue
-
-    text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=chunk_size, chunk_overlap=chunk_overlap
-    )
-    return text_splitter.split_documents(documents)
-
-# Function to create PDF preview
-def get_pdf_preview(uploaded_file, max_pages=2):
+def load_and_split_document(uploaded_file):
     try:
-        pdf_document = fitz.open(stream=uploaded_file.read(), filetype="pdf")
-        preview = ""
-        for page_num in range(min(max_pages, pdf_document.page_count)):
-            page = pdf_document.load_page(page_num)
-            preview += page.get_text("text")[:500] + "\n\n"
-        pdf_document.close()
-        return preview
-    except Exception as e:
-        return f"Error generating preview: {str(e)}"
+        # Create a temporary file
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
+            tmp_file.write(uploaded_file.read())  # Write the uploaded file to the temp file
+            tmp_file_path = tmp_file.name  # Get the temporary file path
 
-# Initialize embeddings and model
-@st.cache_resource
-def initialize_models():
-    embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
-    llm = HuggingFacePipeline.from_model_id(
-        model_id="distilgpt2",
-        task="text-generation",
-        pipeline_kwargs={"max_length": 200, "num_return_sequences": 1},
-    )
-    return embeddings, llm
+        # Load the PDF using PyPDFLoader
+        loader = PyPDFLoader(tmp_file_path)
+        documents = loader.load()
+
+        # Check if documents were loaded
+        if not documents:
+            raise ValueError("No documents processed. The file might be empty or corrupt.")
+        
+        # Split the document into chunks
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+        return text_splitter.split_documents(documents)
+    except Exception as e:
+        st.error(f"Error processing file: {str(e)}")
+        return None
+
+# Function to verify OpenAI API key
+def verify_openai_api_key(api_key):
+    try:
+        # Set the OpenAI API key
+        openai.api_key = api_key
+        # Make a simple API call to check the validity
+        openai.Model.list()  # This will list available models
+        return True
+    except Exception as e:
+        return False
 
 # Streamlit UI
-st.title("Enhanced RAG Model - Retrieval Augmented Generation")
-st.write("Upload PDF(s), customize settings, and ask questions about the content.")
+st.title("RAG Model - Retrieval Augmented Generation")
+st.write("Upload a PDF document and interact with the RAG model.")
 
-# Sidebar for settings
-with st.sidebar:
-    st.header("Settings")
-    chunk_size = st.slider("Chunk Size", 500, 2000, 1000, step=100)
-    chunk_overlap = st.slider("Chunk Overlap", 0, 500, 200, step=50)
-    max_files = st.number_input("Max PDFs to Upload", 1, 10, 3)
-    show_preview = st.checkbox("Show PDF Preview", value=True)
+# Input field for OpenAI API Key
+api_key_input = st.text_input("Enter your OpenAI API Key:", type="password")
 
-# File uploader
-uploaded_files = st.file_uploader(
-    "Upload PDF(s)", type="pdf", accept_multiple_files=True, key="pdf_uploader"
-)
+# Verify the API key
+if api_key_input:
+    if verify_openai_api_key(api_key_input):
+        st.success("API Key is valid!")
+        # Store the API key for use in the app
+        os.environ["OPENAI_API_KEY"] = api_key_input
+    else:
+        st.error("Invalid API Key. Please check and try again.")
 
-if uploaded_files:
-    if len(uploaded_files) > max_files:
-        st.warning(f"Too many files! Only processing the first {max_files} PDFs.")
-        uploaded_files = uploaded_files[:max_files]
+uploaded_file = st.file_uploader("Upload PDF", type="pdf")
 
-    # Show PDF preview
-    if show_preview:
-        with st.expander("PDF Preview"):
-            for uploaded_file in uploaded_files:
-                st.subheader(uploaded_file.name)
-                preview = get_pdf_preview(uploaded_file)
-                st.text_area("Preview", preview, height=150)
+if uploaded_file is not None:
+    st.write("Document uploaded, processing...")
 
-    # Process documents
-    with st.spinner("Processing documents..."):
-        documents = load_and_split_documents(
-            uploaded_files, chunk_size=chunk_size, chunk_overlap=chunk_overlap
-        )
-        if not documents:
-            st.error("No documents processed. Please check the files and try again.")
-        else:
-            st.success(f"Processed {len(documents)} document chunks.")
+    # Process the document
+    documents = load_and_split_document(uploaded_file)
+    if documents:
+        st.write(f"Document split into {len(documents)} chunks.")
 
-            # Create vector store and retriever
-            embeddings, llm = initialize_models()
-            vector_store = FAISS.from_documents(documents, embeddings)
-            st.session_state.retriever = RetrievalQA.from_chain_type(
-                llm=llm, chain_type="stuff", retriever=vector_store.as_retriever()
-            )
-            st.session_state.processed = True
+        # Create the retriever using the loaded documents
+        retriever = RetrievalQA.from_documents(documents, OpenAI())
 
-# Query input
-if st.session_state.processed:
-    query = st.text_input("Ask a question about the document(s):")
-    if query:
-        with st.spinner("Generating answer..."):
-            try:
-                result = st.session_state.retriever({"query": query})["result"]
-                st.write(f"**Answer**: {result}")
+        # User query input
+        query = st.text_input("Ask a question:")
 
-                # Save to query history
-                st.session_state.query_history.append({
-                    "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    "query": query,
-                    "answer": result
-                })
-            except Exception as e:
-                st.error(f"Error generating answer: {str(e)}")
-
-# Display query history
-if st.session_state.query_history:
-    with st.expander("Query History"):
-        history_df = pd.DataFrame(st.session_state.query_history)
-        st.dataframe(history_df)
-
-        # Export history
-        if st.button("Export History"):
-            history_df.to_csv("query_history.csv", index=False)
-            st.success("History exported as query_history.csv")
-
-# Reset button
-if st.button("Reset"):
-    st.session_state.clear()
-    st.experimental_rerun()
+        if query:
+            # Retrieve the answer from the model
+            result = retriever.run(query)
+            st.write(f"Answer: {result}")

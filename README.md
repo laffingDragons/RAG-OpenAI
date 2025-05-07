@@ -3,7 +3,7 @@
 ## Overview
 This Streamlit app allows you to interact with a Retrieval-Augmented Generation (RAG) model. The app can process documents (PDF format) and answer questions based on the content of the document.
 
-<img width="721" alt="Screenshot 2025-05-07 at 7 58 19 PM" src="https://github.com/user-attachments/assets/23a86338-24c1-42ca-b638-06530feeccb1" />
+![alt text](image-1.png)
 
 
 ## Features
