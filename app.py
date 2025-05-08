@@ -3,6 +3,8 @@ from langchain_community.document_loaders import PyPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.chains import RetrievalQA
 from langchain.llms import OpenAI
+from langchain.vectorstores import FAISS
+from langchain.embeddings import OpenAIEmbeddings
 from dotenv import load_dotenv
 import os
 import tempfile
@@ -30,12 +32,11 @@ def load_and_split_document(uploaded_file):
         split_documents = text_splitter.split_documents(documents)
 
         # Debug: Check the structure of documents
-        st.write(f"Documents: {split_documents[:3]}")  # Output the first 3 chunks for debugging
+        st.write(f"Number of document chunks: {len(split_documents)}")
+        if len(split_documents) > 0:
+            st.write(f"Sample chunk: {split_documents[0].page_content[:100]}...")
         
-        # Ensure documents are in the correct format (i.e., list of Document objects)
-        processed_documents = [Document(page_content=doc.page_content, metadata=doc.metadata) for doc in split_documents]
-        
-        return processed_documents
+        return split_documents
     except Exception as e:
         st.error(f"Error processing file: {str(e)}")
         return None
@@ -49,6 +50,7 @@ def verify_openai_api_key(api_key):
         openai.Model.list()  # This will list available models
         return True
     except Exception as e:
+        st.error(f"API verification error: {str(e)}")
         return False
 
 # Streamlit UI
@@ -69,19 +71,41 @@ if api_key_input:
 
 uploaded_file = st.file_uploader("Upload PDF", type="pdf")
 
-if uploaded_file is not None:
+if uploaded_file is not None and "OPENAI_API_KEY" in os.environ:
     st.write("Document uploaded, processing...")
 
     # Process the document
     documents = load_and_split_document(uploaded_file)
-    if documents:
+    
+    if documents and len(documents) > 0:
         st.write(f"Document split into {len(documents)} chunks.")
 
-        # Create the retriever using the loaded documents
+        # Create the vector store and retriever
         try:
-            retriever = RetrievalQA.from_documents(documents, OpenAI())
+            # Create embeddings
+            embeddings = OpenAIEmbeddings()
+            
+            # Create vector store
+            vectorstore = FAISS.from_documents(documents, embeddings)
+            
+            # Create the retriever
+            retriever = vectorstore.as_retriever()
+            
+            # Create the QA chain
+            llm = OpenAI(temperature=0)
+            qa_chain = RetrievalQA.from_chain_type(
+                llm=llm,
+                chain_type="stuff",
+                retriever=retriever
+            )
+            
+            st.session_state.qa_chain = qa_chain
+            st.success("RAG model ready! You can now ask questions.")
+            
         except Exception as e:
             st.error(f"Error creating retriever: {str(e)}")
+            import traceback
+            st.error(traceback.format_exc())
 
         # User query input
         query = st.text_input("Ask a question:")
@@ -89,7 +113,17 @@ if uploaded_file is not None:
         if query:
             # Retrieve the answer from the model
             try:
-                result = retriever.run(query)
-                st.write(f"Answer: {result}")
+                if "qa_chain" in st.session_state:
+                    result = st.session_state.qa_chain.run(query)
+                    st.write(f"Answer: {result}")
+                else:
+                    st.error("QA chain not initialized. Please check previous errors.")
             except Exception as e:
                 st.error(f"Error retrieving answer: {str(e)}")
+                import traceback
+                st.error(traceback.format_exc())
+    elif documents is not None:
+        st.error("No document chunks were created. The PDF might be empty or unreadable.")
+else:
+    if uploaded_file is not None and "OPENAI_API_KEY" not in os.environ:
+        st.warning("Please enter a valid OpenAI API key before processing documents.")
