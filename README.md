@@ -11,7 +11,7 @@ This Streamlit app allows you to interact with a Retrieval-Augmented Generation 
 - **Text Splitting**: The document is split into manageable chunks for efficient querying.
 - **Question Answering**: Ask questions about the content of the uploaded document, and get accurate responses powered by the RAG model.
 
-![alt text](image.png)
+![alt text](image-2.png)
 
 ## Requirements
 - Python 3.x
