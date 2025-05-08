@@ -13,6 +13,9 @@ This Streamlit app allows you to interact with a Retrieval-Augmented Generation 
 
 ![alt text](image-2.png)
 
+### Live streamlit 
+[Live Demo](https://rag-openai.streamlit.app/)
+
 ## Requirements
 - Python 3.x
 - Streamlit
